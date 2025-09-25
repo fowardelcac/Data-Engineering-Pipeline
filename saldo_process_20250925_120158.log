@@ -1,0 +1,25 @@
+2025-09-25 12:01:58,215 - INFO - ============================================================
+2025-09-25 12:01:58,216 - INFO - INICIANDO PROCESO DE IMPORTACIÓN DE SALDOS
+2025-09-25 12:01:58,216 - INFO - ============================================================
+2025-09-25 12:01:58,216 - INFO - 📁 Leyendo archivo: C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\PREVISION.xlsx
+2025-09-25 12:01:58,425 - INFO - 📊 Archivo leído exitosamente: 777 filas encontradas
+2025-09-25 12:01:58,425 - INFO - 🔄 Iniciando preprocesamiento...
+2025-09-25 12:01:58,437 - INFO - ✅ Preprocesamiento completado: 14 filas válidas (eliminadas: 763)
+2025-09-25 12:01:58,437 - INFO - 🚀 Iniciando procesamiento de saldos...
+2025-09-25 12:01:58,461 - INFO - 💾 Realizando commit final...
+2025-09-25 12:01:58,461 - INFO - ✅ Commit exitoso
+2025-09-25 12:01:58,461 - INFO - 📋 Generando reportes finales...
+2025-09-25 12:01:58,461 - INFO - ============================================================
+2025-09-25 12:01:58,461 - INFO - 📊 RESUMEN FINAL DEL PROCESO
+2025-09-25 12:01:58,461 - INFO - ============================================================
+2025-09-25 12:01:58,462 - INFO - ⏰ Duración total: 0:00:00.245246
+2025-09-25 12:01:58,462 - INFO - 📁 Total procesadas: 14
+2025-09-25 12:01:58,462 - INFO - ✨ Nuevos registros: 0
+2025-09-25 12:01:58,463 - INFO - 📝 Registros actualizados: 0
+2025-09-25 12:01:58,463 - INFO - ⚪ Sin cambios: 14
+2025-09-25 12:01:58,463 - INFO - ❌ Errores: 0
+2025-09-25 12:01:58,463 - INFO - 📊 Tasa de éxito: 0.0%
+2025-09-25 12:01:58,464 - INFO - 📋 Log guardado en: saldo_process_20250925_120158.log
+2025-09-25 12:01:58,464 - INFO - ============================================================
+2025-09-25 12:01:58,464 - INFO - ✅ PROCESO COMPLETADO
+2025-09-25 12:01:58,464 - INFO - ============================================================

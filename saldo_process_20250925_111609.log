@@ -1,0 +1,20 @@
+2025-09-25 11:16:09,196 - INFO - ============================================================
+2025-09-25 11:16:09,196 - INFO - INICIANDO PROCESO DE IMPORTACIÓN DE SALDOS
+2025-09-25 11:16:09,196 - INFO - ============================================================
+2025-09-25 11:16:09,197 - INFO - 📁 Leyendo archivo: C:/Users/jsaldano/Documents/Procesar/Pipeline/PREVISION.xlsx
+2025-09-25 11:16:09,197 - ERROR - ❌ ERROR CRÍTICO: Archivo no encontrado: C:/Users/jsaldano/Documents/Procesar/Pipeline/PREVISION.xlsx
+2025-09-25 11:16:09,197 - INFO - 📋 Generando reportes finales...
+2025-09-25 11:16:09,197 - INFO - ============================================================
+2025-09-25 11:16:09,197 - INFO - 📊 RESUMEN FINAL DEL PROCESO
+2025-09-25 11:16:09,197 - INFO - ============================================================
+2025-09-25 11:16:09,197 - INFO - ⏰ Duración total: 0:00:00.000318
+2025-09-25 11:16:09,197 - INFO - 📁 Total procesadas: 0
+2025-09-25 11:16:09,197 - INFO - ✨ Nuevos registros: 0
+2025-09-25 11:16:09,197 - INFO - 📝 Registros actualizados: 0
+2025-09-25 11:16:09,197 - INFO - ⚪ Sin cambios: 0
+2025-09-25 11:16:09,197 - INFO - ❌ Errores: 0
+2025-09-25 11:16:09,197 - INFO - 📊 Tasa de éxito: 0.0%
+2025-09-25 11:16:09,198 - INFO - 📋 Log guardado en: saldo_process_20250925_111609.log
+2025-09-25 11:16:09,198 - INFO - ============================================================
+2025-09-25 11:16:09,198 - INFO - ✅ PROCESO COMPLETADO
+2025-09-25 11:16:09,198 - INFO - ============================================================

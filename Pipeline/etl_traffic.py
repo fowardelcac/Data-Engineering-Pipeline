@@ -1,7 +1,8 @@
-import pandas as pd  # type: ignore
-from models import Proveedor, Pasajero, Reserva
-from sqlmodel import Session, select, and_  # type: ignore
-from functions import *
+import pandas as pd
+from Pipeline.models import Proveedor, Pasajero, Reserva, Iata
+from sqlmodel import Session, select
+from Pipeline.functions import *
+from Pipeline.scrape_traffic import main_scraper
 
 
 def bulk_prov(df: pd.DataFrame, session: Session, logger: logging.Logger) -> dict:
@@ -54,67 +55,78 @@ def process_row(
 ) -> None:
     """Procesa una fila con tracking detallado"""
     file_code = row.get("file", f"ROW_{row_index}")
+    id_orden = row.get("id_orden")
     try:
         tracker.increment_processed()
+
+        codigo_iata = row.get("codigo_iata")
+        codigo_iata_valido = None
+        
+        if codigo_iata and pd.notna(codigo_iata):
+            exists = session.exec(select(Iata).where(Iata.codigo_iata == codigo_iata)).first()
+            if exists:
+                codigo_iata_valido = codigo_iata
+            else:
+                logger.warning(f"⚠️ Código IATA '{codigo_iata}' no encontrado. Fila {row_index} será omitida.")
+                tracker.add_error(file_code, row, f"Código IATA '{codigo_iata}' no existe en la BD")
+                return  # ❌ No insertar si el IATA es inválido
+            
         create_dic: dict = {
-            "file": row["file"],
-            "estado": row["estado"] if pd.notna(row["estado"]) else None,
-            "moneda": row["moneda"] if pd.notna(row["moneda"]) else None,
-            "total": row["monto_a_pagar"] if pd.notna(row["monto_a_pagar"]) else None,
-            "fecha_pago_proveedor": (
-                row["fecha_de_pago_proveedor"]
-                if pd.notna(row["fecha_de_pago_proveedor"])
-                else None
-            ),
-            "fecha_in": (
-                row["fecha_servicio"] if pd.notna(row["fecha_servicio"]) else None
-            ),
-            "fecha_out": row["fecha_out"] if pd.notna(row["fecha_out"]) else None,
+            "id_reserva": id_orden,
+            "file": row.get("file"),
+            "estado": row.get("estado"),
+            "moneda": row.get("moneda"),
+            "total": row.get("monto_a_pagar"),
+            "fecha_pago_proveedor": row.get("fecha_de_pago_proveedor"),
+            "fecha_in": row.get("fecha_servicio"),
+            "fecha_out": row.get("fecha_out"),
+            "fecha_sal": row.get("fecha_sal"),
             "id_proveedor": proveedores_map.get(row["proveedor"]),
             "id_pasajero": pasajeros_map.get(row["pasajero"]),
-            "codigo_iata": row["ciudad"] if pd.notna(row["ciudad"]) else None,
+            "codigo_iata": codigo_iata_valido,
         }
 
-        conditions = [
-            Reserva.file == create_dic.get("file"),
-            Reserva.id_pasajero == create_dic.get("id_pasajero"),
-            Reserva.id_proveedor == create_dic.get("id_proveedor"),
-            Reserva.total == create_dic.get("total"),
-        ]
+        result = session.exec(
+            select(Reserva).where(Reserva.id_reserva == id_orden)).first()
 
-        result = session.exec(select(Reserva).where(and_(*conditions))).first()
         if result:
             # Registro existente - verificar actualizaciones
             changed_fields = []
             items: list = [
                 "estado",
                 "moneda",
+                "total",
                 "fecha_pago_proveedor",
                 "fecha_in",
                 "fecha_out",
+                "fecha_sal",
                 "codigo_iata",
             ]
             for key in items:
                 value = create_dic.get(key)
-                if getattr(result, key) != value:
+                current = getattr(result, key)
+
+                if values_differ(current, value):
+                    logger.debug(f"   CAMPO '{key}': '{current}' → '{value}'")
                     setattr(result, key, value)
                     changed_fields.append(key)
+
             if changed_fields:
                 session.add(result)
                 tracker.add_update(file_code, row, changed_fields)
                 logger.info(
-                    f"📝 ACTUALIZADO: {file_code} - Campos: {', '.join(changed_fields)}"
+                    f"📝 ACTUALIZADO: {file_code} (ID: {id_orden}) - Campos: {', '.join(changed_fields)}"
                 )
             else:
-                tracker.add_no_change(file_code)
+                tracker.add_no_change()
                 if row_index % 500 == 0:  # Log menos frecuente para sin cambios
-                    logger.debug(f"⚪ SIN CAMBIOS: {file_code}")
+                    logger.debug(f"⚪ SIN CAMBIOS: {file_code} (ID: {id_orden})")
         else:
             nueva = Reserva(**create_dic)
             session.add(nueva)
             tracker.add_new(file_code, row)
             logger.info(
-                f"✨ NUEVO: {file_code} - Proveedor: {row.get('proveedor', 'N/A')}"
+                f"✨ NUEVO: {file_code} (ID: {id_orden}) - Proveedor: {row.get('proveedor', 'N/A')}"
             )
     except Exception as e:
         error_msg = f"Error procesando fila {row_index}: {str(e)}"
@@ -122,27 +134,24 @@ def process_row(
         logger.error(f"❌ ERROR: {file_code} - {error_msg}")
 
 
-def main():
+def main_traffic():
     """Función principal con logging completo"""
     # Setup inicial
-    logger, log_filename = setup_logging()
+    logger = setup_logging()
     tracker = ProcessTracker()
     try:
-        # Leer archivo
-        excel_path = (
-            r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\SaldoAutoriza.xlsx"
+        logger.info("Iniciando comunicacion con traffic...")
+        data: pd.DataFrame = main_scraper()
+        logger.info(
+            f"📊 Archivo descargado exitosamente: {len(data)} filas encontradas"
         )
-        logger.info(f"📁 Leyendo archivo: {excel_path}")
-        if not os.path.exists(excel_path):
-            raise FileNotFoundError(f"Archivo no encontrado: {excel_path}")
-
-        df = pd.read_excel(excel_path)
-        logger.info(f"📊 Archivo leído exitosamente: {len(df)} filas encontradas")
 
         # Preprocesamiento
         logger.info("🔄 Iniciando preprocesamiento...")
-        df_original_count = len(df)
-        df = preproccess_traffic(df)
+        df_original_count = len(data)
+        df: pd.DataFrame = preproccess_traffic(data)
+        df.to_excel("excel.xlsx")
+
         logger.info(
             f"✅ Preprocesamiento completado: {len(df)} filas válidas (eliminadas: {df_original_count - len(df)})"
         )
@@ -157,6 +166,7 @@ def main():
                 process_row(
                     session, row, proveedores_map, pasajeros_map, tracker, logger, index
                 )
+
                 # Progress logging
                 if (index + 1) % 100 == 0:
                     stats = tracker.stats
@@ -193,18 +203,14 @@ def main():
         logger.info(f"📊 Tasa de éxito: {summary['tasa_exito']}%")
 
         # Exportar a Excel
-        folder = (
-            r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\Posibles Errores"
-        )
-        excel_filename = tracker.export_to_excel(folder)
+        excel_filename = tracker.export_to_excel(ERRORES)
         if excel_filename:
             logger.info(f"📄 Reporte Excel generado: {excel_filename}")
 
-        logger.info(f"📋 Log guardado en: {log_filename}")
         logger.info("=" * 60)
         logger.info("✅ PROCESO COMPLETADO")
         logger.info("=" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    main_traffic()

@@ -1,5 +1,6 @@
-CREATE DATABASE prevision;
-USE prevision;
+DROP DATABASE PREVISION;
+CREATE DATABASE PREVISION;
+USE PREVISION;
 
 CREATE TABLE proveedores (
     id_proveedor INT AUTO_INCREMENT PRIMARY KEY,
@@ -18,7 +19,7 @@ CREATE TABLE iatas (
 
 CREATE TABLE cuentas (
     id_cuenta INT AUTO_INCREMENT PRIMARY KEY,
-    banco VARCHAR(50)
+    banco VARCHAR(50) UNIQUE
 );
 
 CREATE TABLE reservas (
@@ -30,14 +31,14 @@ CREATE TABLE reservas (
     fecha_pago_proveedor DATE,
     fecha_in DATE,
     fecha_out DATE,
-    id_proveedor INT,
-    id_pasajero INT,
+    fecha_sal DATE,
+    id_proveedor int,
+    id_pasajero int,
     codigo_iata VARCHAR(3),
     FOREIGN KEY (id_proveedor) REFERENCES proveedores(id_proveedor),
     FOREIGN KEY (id_pasajero) REFERENCES pasajeros(id_pasajero),
     FOREIGN KEY (codigo_iata) REFERENCES iatas(codigo_iata)
 );
-
  
 CREATE TABLE saldos (
     id_saldo INT AUTO_INCREMENT PRIMARY KEY,
@@ -52,13 +53,13 @@ CREATE TABLE saldos (
     impuesto DECIMAL(15, 2),
     estado_pago ENUM('CANCELADO', 'PAGADO', 'PENDIENTE', 'UTILIZADO'),
     tipo_de_saldo VARCHAR(30),
-    id_reserva INT,
-    id_cuenta INT,
+    id_reserva int,
+    id_cuenta int,
     FOREIGN KEY (id_reserva) REFERENCES reservas(id_reserva),
     FOREIGN KEY (id_cuenta) REFERENCES cuentas(id_cuenta)
 );
 
-
+-- ~duplicate
 INSERT INTO cuentas (banco) VALUES 
 ('EFECTIVO'),
 ('PAYONEER'),
@@ -71,7 +72,7 @@ INSERT INTO cuentas (banco) VALUES
 ('NC'),
 ('NACION ARS');
 
-CREATE view gabi_prevision AS
+CREATE VIEW gabi_prevision AS
 SELECT
     r.id_reserva,
     r.file,
@@ -106,42 +107,5 @@ LEFT JOIN pasajeros pa ON pa.id_pasajero = r.id_pasajero
 LEFT JOIN iatas i ON i.codigo_iata = r.codigo_iata
 LEFT JOIN saldos s ON s.id_reserva = r.id_reserva
 LEFT JOIN cuentas c ON c.id_cuenta = s.id_cuenta
-WHERE r.fecha_pago_proveedor >= CURDATE()
-ORDER BY r.fecha_pago_proveedor ASC;
-
-CREATE VIEW s4 AS
-SELECT
-  s.file,
-  id_saldo,
-  id_reserva,
-  tipo_movimiento,
-  fecha_pago,
-  moneda_pago,
-  monto,
-  tipo_de_cambio,
-  comision,
-  impuesto,
-  estado_pago,
-
-  -- Ingreso en USD
-  ROUND(
-    CASE
-      WHEN UPPER(moneda_pago) = 'P'
-        THEN monto / NULLIF(tipo_de_cambio, 0)
-      ELSE monto
-    END, 2
-  ) AS ingreso_usd,
-
-  -- Gasto en USD (comisiones + impuestos)
-  ROUND(
-  CASE
-    WHEN UPPER(s.moneda_pago) = 'P'
-      THEN (COALESCE(s.comision,0) + COALESCE(s.impuesto,0)) / NULLIF(s.tipo_de_cambio, 0)
-    ELSE (COALESCE(s.comision,0) + COALESCE(s.impuesto,0))
-  END, 2
-) AS gasto_usd
-
-FROM saldos s
-LEFT JOIN reservas r ON r.id_reserva = s.id_reserva;
-
+WHERE r.fecha_pago_proveedor >= CURDATE();
 

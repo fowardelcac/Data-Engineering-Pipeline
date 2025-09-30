@@ -1,28 +1,130 @@
-import pandas as pd # pyright: ignore[reportMissingModuleSource]
-from sqlmodel import select, create_engine # type: ignore
+import pandas as pd
+from sqlmodel import select, create_engine
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, date
 
-
+# PATHS
 ENGINE = create_engine("mysql+pymysql://root:Trips2025*@localhost/prevision")
+
+PREVISION: str = (
+    r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\PREVISION.xlsx"
+)
+ERRORES: str = (
+    r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\Posibles Errores"
+)
+
+
+def clean_str(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    for col in columns:
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str).str.strip().str.upper()
+    return df
+
+def clean_nan(value):
+    return None if pd.isna(value) else value
+
+def values_differ(current, value) -> bool:
+    """
+    Compara valores considerando fechas, NaT, NaN y None de forma robusta.
+    CRITICAL: Esta función debe detectar cambios REALES, no falsos positivos.
+    """
+    # ✅ Normalizar ambos valores primero
+    def normalize(val):
+        # NaT, NaN, pd.NA → None
+        if pd.isna(val):
+            return None
+        # Timestamp → date
+        if isinstance(val, pd.Timestamp):
+            return val.date()
+        # Strings vacíos → None
+        if isinstance(val, str) and val.strip() == "":
+            return None
+        return val
+    
+    curr_norm = normalize(current)
+    val_norm = normalize(value)
+    
+    # Si ambos son None → NO difieren
+    if curr_norm is None and val_norm is None:
+        return False
+    
+    # Si solo uno es None → SÍ difieren
+    if (curr_norm is None) != (val_norm is None):
+        return True
+    
+    # Comparación especial para fechas
+    if isinstance(curr_norm, (datetime, date)) and isinstance(val_norm, (datetime, date)):
+        curr_date = curr_norm.date() if isinstance(curr_norm, datetime) else curr_norm
+        val_date = val_norm.date() if isinstance(val_norm, datetime) else val_norm
+        return curr_date != val_date
+    
+    # Comparación genérica
+    return curr_norm != val_norm
 
 
 def preproccess_traffic(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
     df.drop_duplicates(subset=df.columns, inplace=True)
     df.dropna(subset=["file", "proveedor", "pasajero"], inplace=True)
-    df.loc[:, "estado"] = df["estado"].str.strip().str.upper()
-    df.loc[:, "moneda"] = df["moneda"].str.strip().str.upper()
-    df.loc[:, "monto_a_pagar"] = round(df["monto_a_pagar"], 2)
-    df.loc[:, "fecha_de_pago_proveedor"] = df["fecha_de_pago_proveedor"].dt.date
-    df.loc[:, "fecha_servicio"] = df["fecha_servicio"].dt.date
-    df.loc[:, "proveedor"] = df["proveedor"].str.strip().str.upper()
-    df.loc[:, "pasajero"] = df["pasajero"].str.strip().str.upper()
-    df.loc[:, "fecha_out"] = df["fecha_out"].dt.date
-    df.loc[:, "ciudad"] = df["ciudad"].str.strip().str.upper().replace({"": None})
 
+    df = clean_str(df, ["estado", "moneda", "proveedor", "pasajero", "codigo_iata"])
+    df.loc[:, "monto_a_pagar"] = round(df["monto_a_pagar"], 2)
+    
+    # ✅ Convertir fechas manejando NaT correctamente
+    date_cols = ["fecha_de_pago_proveedor", "fecha_servicio", "fecha_out", "fecha_sal"]
+    for col in date_cols:
+        df.loc[:, col] = pd.to_datetime(df[col], errors='coerce').dt.date
+    
+    # Convertir strings vacíos a None
+    text_cols = df.select_dtypes(include="object").columns
+    df[text_cols] = df[text_cols].replace({"": None})
+    
     return df
+
+
+def preproccess_prev(df: pd.DataFrame) -> pd.DataFrame:
+    columns_to_check = [
+        "codigo_transferencia",
+        "tipo_movimiento",
+        "fecha_pago",
+        "descripcion",
+        "moneda_pago",
+        "monto",
+        "tipo_de_cambio",
+        "comision",
+        "impuesto",
+        "estado_pago",
+        "tipo_de_saldo",
+        "banco",
+    ]
+
+    df_filtered = df[df[columns_to_check].notna().any(axis=1)].copy()
+
+    df_filtered = clean_str(
+        df_filtered,
+        [
+            "codigo_transferencia",
+            "tipo_movimiento",
+            "descripcion",
+            "moneda_pago",
+            "estado_pago",
+            "tipo_de_saldo",
+            "banco",
+        ],
+    )
+    
+    df_filtered["codigo_transferencia"] = df_filtered[
+        "codigo_transferencia"
+    ].str.replace(".0", "")
+
+    df_filtered["fecha_pago"] = pd.to_datetime(
+        df_filtered["fecha_pago"], errors="coerce"
+    ).dt.date
+    
+    text_cols = df_filtered.select_dtypes(include="object").columns
+    df_filtered[text_cols] = df_filtered[text_cols].replace({"": None})
+    return df_filtered
 
 
 #############################################################################################
@@ -54,21 +156,19 @@ def verify_existence(session, model, field_name, value):
 # RELACIONADO CON LOGS
 def setup_logging():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"reservas_process_{timestamp}.log"
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.FileHandler(log_filename, encoding='utf-8'),
-            logging.StreamHandler()  # También muestra en consola
-        ]
+            logging.StreamHandler(),  # También muestra en consola
+        ],
     )
-    
+
     logger = logging.getLogger(__name__)
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info("INICIANDO PROCESO DE IMPORTACIÓN DE RESERVAS")
-    logger.info("="*60)
-    return logger, log_filename
+    logger.info("=" * 60)
+    return logger
 
 
 class ProcessTracker:
@@ -117,6 +217,7 @@ class ProcessTracker:
                 "detalle": f'Campos actualizados: {", ".join(changed_fields)}',
             }
         )
+        print(self.updated_records[-1])
 
     def add_no_change(self):
         """Registra un registro sin cambios"""

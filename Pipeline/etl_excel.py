@@ -1,8 +1,15 @@
 import pandas as pd
 from Pipeline.models import Saldo, Cuenta, Reserva
 from sqlmodel import Session, select
-import logging
 from Pipeline.functions import *
+from Pipeline.functions import (
+    setup_logging,
+    verify_existence,
+    ProcessData,
+    ProcessTracker,
+)
+from Pipeline.utils import ENGINE, PREVISION
+import os
 
 
 def process_row(
@@ -26,10 +33,10 @@ def process_row(
             "fecha_pago": row.get("fecha_pago"),
             "descripcion": row.get("descripcion"),
             "moneda_pago": row.get("moneda_pago"),
-            "monto": clean_nan(row.get("monto")),
-            "tipo_de_cambio": clean_nan(row.get("tipo_de_cambio")),
-            "comision": clean_nan(row.get("comision")),
-            "impuesto": clean_nan(row.get("impuesto")),
+            "monto": ProcessData.clean_nan(row.get("monto")),
+            "tipo_de_cambio": ProcessData.clean_nan(row.get("tipo_de_cambio")),
+            "comision": ProcessData.clean_nan(row.get("comision")),
+            "impuesto": ProcessData.clean_nan(row.get("impuesto")),
             "estado_pago": row.get("estado_pago"),
             "tipo_de_saldo": row.get("tipo_de_saldo"),
             "id_reserva": None,
@@ -72,7 +79,7 @@ def process_row(
                 value = create_dic.get(key)
                 current = getattr(verify_saldo, key)
 
-                if values_differ(current, value):
+                if value != current:
                     setattr(verify_saldo, key, value)
                     changed_fields.append(key)
 
@@ -99,11 +106,12 @@ def main_excel():
         logger.info(f"📁 Leyendo archivo: {PREVISION}")
         if not os.path.exists(PREVISION):
             raise FileNotFoundError(f"Archivo no encontrado: {PREVISION}")
+
         df = pd.read_excel(PREVISION, engine="openpyxl")
         logger.info(f"📊 Archivo leído exitosamente: {len(df)} filas encontradas")
         logger.info("🔄 Iniciando preprocesamiento...")
         df_original_count = len(df)
-        df = preproccess_prev(df)
+        df = ProcessData.preprocess_prev(df)
         logger.info(
             f"✅ Preprocesamiento completado: {len(df)} filas válidas (eliminadas: {df_original_count - len(df)})"
         )
@@ -138,10 +146,6 @@ def main_excel():
         logger.info(f"⚪ Sin cambios: {summary['stats']['sin_cambios']}")
         logger.info(f"❌ Errores: {summary['stats']['errores']}")
         logger.info(f"📊 Tasa de éxito: {summary['tasa_exito']}%")
-
-        excel_filename = tracker.export_to_excel(ERRORES)
-        if excel_filename:
-            logger.info(f"📄 Reporte Excel generado: {excel_filename}")
         logger.info("=" * 60)
         logger.info("✅ PROCESO COMPLETADO")
         logger.info("=" * 60)

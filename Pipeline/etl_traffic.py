@@ -1,8 +1,15 @@
 import pandas as pd
 from Pipeline.models import Proveedor, Pasajero, Reserva, Iata
 from sqlmodel import Session, and_, select
-from Pipeline.functions import *
+from Pipeline.functions import (
+    ProcessData,
+    ProcessTracker,
+    logging,
+    setup_logging,
+    verify_existence,
+)
 from Pipeline.scrape_traffic import main_scraper
+from Pipeline.utils import ENGINE
 
 
 def bulk_prov(df: pd.DataFrame, session: Session, logger: logging.Logger) -> dict:
@@ -55,7 +62,7 @@ def process_row(
 ) -> None:
     """Procesa una fila con tracking detallado"""
     file_code = row.get("file", f"ROW_{row_index}")
-    row_hash: str = hash_row(row)
+    row_hash: str = ProcessData.hash_row(row)
     try:
         tracker.increment_processed()
 
@@ -63,10 +70,8 @@ def process_row(
         codigo_iata_valido = None
 
         if codigo_iata and pd.notna(codigo_iata):
-            exists = session.exec(
-                select(Iata).where(Iata.codigo_iata == codigo_iata)
-            ).first()
-            if exists:
+            exist = verify_existence(session, Iata, "codigo_iata", codigo_iata)
+            if exist:
                 codigo_iata_valido = codigo_iata
             else:
                 logger.warning(
@@ -86,6 +91,7 @@ def process_row(
             "fecha_in": row.get("fecha_in"),
             "fecha_out": row.get("fecha_out"),
             "fecha_sal": row.get("fecha_sal"),
+            "hash": row_hash,
             "id_proveedor": proveedores_map.get(row["proveedor"]),
             "id_pasajero": pasajeros_map.get(row["pasajero"]),
             "codigo_iata": codigo_iata_valido,
@@ -116,7 +122,6 @@ def process_row(
                 new_estado = row.get("estado")
                 if exist.estado != new_estado:
                     exist.estado = new_estado
-                    exist.hash = row_hash  # actualizo el hash a la nueva versión
                     session.add(exist)
                     tracker.add_update(file_code, row, ["estado"])
                     logger.info(f"📝 ESTADO ACTUALIZADO: {file_code} → {new_estado}")
@@ -124,7 +129,6 @@ def process_row(
                     tracker.add_no_change()
             else:
                 # Transacción nueva
-                create_dic["hash"] = row_hash
                 new_reserva = Reserva(**create_dic)
                 session.add(new_reserva)
                 session.flush()
@@ -143,21 +147,15 @@ def main_traffic():
     tracker = ProcessTracker()
     try:
         logger.info("Iniciando comunicacion con traffic...")
-        """data: pd.DataFrame = main_scraper()
-        logger.info(
-            f"📊 Archivo descargado exitosamente: {len(data)} filas encontradas"
-        )
 
-        # Preprocesamiento
         logger.info("🔄 Iniciando preprocesamiento...")
+        data: pd.DataFrame = main_scraper()
         df_original_count = len(data)
-        df: pd.DataFrame = preproccess_traffic(data)
-        df.to_excel("excel.xlsx")"""
-        df = pd.read_excel(
-            "C:\\Users\\juans\\Documents\\cv\\Proyectos\\Ingenieria-de-Datos\\TSA\\Data-Engineering-Pipeline2\\Pipeline\\Archivos\\traffic_data.xlsx"
+
+        logger.info(
+            f"📊 Archivo descargado exitosamente: {df_original_count} filas encontradas"
         )
-        df_original_count = len(df)
-        df = preproccess_traffic(df)
+        df = ProcessData.preproccess_traffic(data)
 
         logger.info(
             f"✅ Preprocesamiento completado: {len(df)} filas válidas (eliminadas: {df_original_count - len(df)})"

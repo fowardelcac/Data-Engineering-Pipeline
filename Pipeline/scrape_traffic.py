@@ -1,6 +1,5 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 import time
 import requests
 import pandas as pd
@@ -18,10 +17,7 @@ def main_scraper() -> pd.DataFrame:
     PASSWORD = "southamerica123"
 
     FECHA_HOY = datetime.datetime.now()
-    FECHA_TOP = FECHA_HOY + relativedelta(months=20)
-    print("FECHAS")
-    print(FECHA_HOY, FECHA_TOP)
-
+    FECHA_TOP = FECHA_HOY + relativedelta(months=3)
     # 1️⃣ Inicializar Selenium
     options = webdriver.ChromeOptions()
     options.add_argument("--start-maximized")  # maximiza ventana

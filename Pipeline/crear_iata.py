@@ -1,9 +1,9 @@
 import pandas as pd
 from models import Iata
-from sqlmodel import create_engine, Session
+from sqlmodel import Session
 from functions import *
+from utils import ENGINE, IATA_PATH
 
-IATA_PATH: str = r"C:\Users\juans\Documents\cv\Proyectos\Ingenieria-de-Datos\TSA\Data-Engineering-Pipeline2\Pipeline\Archivos\iatas.xlsx"
 df = pd.read_excel(IATA_PATH)
 
 

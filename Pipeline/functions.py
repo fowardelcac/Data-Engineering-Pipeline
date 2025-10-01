@@ -1,111 +1,118 @@
 import pandas as pd
-from sqlmodel import select, create_engine
+from sqlmodel import select
 import logging
-import os
-from datetime import datetime, date
-import hashlib
-
-# PATHS
-ENGINE = create_engine("mysql+pymysql://root:2001@localhost/prevision")
-
-PREVISION: str = (
-    r"C:\Users\juans\Documents\cv\Proyectos\Ingenieria-de-Datos\TSA\Data-Engineering-Pipeline2\Pipeline\Archivos\PREVISION.xlsx"
-)
-ERRORES: str = (
-    r"C:\Users\juans\Documents\cv\Proyectos\Ingenieria-de-Datos\TSA\Data-Engineering-Pipeline2\Pipeline\Archivos\Posibles Errores"
-)
-
+from datetime import datetime
 import hashlib
 
 
-def hash_row(row):
-    # columnas que definen la transacción
-    claves = [
-        "file",
-        "moneda",
-        "fecha_in",
-        "fecha_out",
-        "fecha_sal",
-        "proveedor",
-        "pasajero",
-        "codigo_iata",
-    ]
-    row_str = "|".join(str(row[c]) for c in claves)
-    return hashlib.sha256(row_str.encode()).hexdigest()
+class ProcessData:
+    @staticmethod
+    def hash_row(row):
+        # columnas que definen la transacción
+        claves = [
+            "file",
+            "moneda",
+            "fecha_in",
+            "fecha_out",
+            "fecha_sal",
+            "proveedor",
+            "pasajero",
+            "codigo_iata",
+        ]
+        row_str = "|".join(str(row[c]) for c in claves)
+        return hashlib.sha256(row_str.encode()).hexdigest()
 
+    @staticmethod
+    def clean_str(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+        for col in columns:
+            if col in df.columns:
+                df[col] = df[col].fillna("").astype(str).str.strip().str.upper()
+        return df
 
-def clean_str(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    for col in columns:
-        if col in df.columns:
-            df[col] = df[col].fillna("").astype(str).str.strip().str.upper()
-    return df
+    @staticmethod
+    def clean_nan(value):
+        return None if pd.isna(value) else value
 
+    @staticmethod
+    def preproccess_traffic(df: pd.DataFrame) -> pd.DataFrame:
+        # --- Limpiar strings primero ---
+        df = ProcessData.clean_str(
+            df, ["estado", "moneda", "proveedor", "pasajero", "codigo_iata"]
+        )
 
-def clean_nan(value):
-    return None if pd.isna(value) else value
+        # --- Convertir strings vacíos a None ---
+        text_cols = df.select_dtypes(include="object").columns
+        df[text_cols] = df[text_cols].replace({"": None})
 
+        # --- Redondear totales ---
+        df.loc[:, "total"] = round(df["total"], 2)
 
-def preproccess_traffic(df: pd.DataFrame) -> pd.DataFrame:
-    df.drop_duplicates(subset=df.columns, inplace=True)
-    df.dropna(subset=["file"], inplace=True)
+        # --- Convertir fechas ---
+        date_cols = ["fecha_pago_proveedor", "fecha_in", "fecha_out", "fecha_sal"]
+        for col in date_cols:
+            df.loc[:, col] = pd.to_datetime(df[col], errors="coerce").dt.date
 
-    df = clean_str(df, ["estado", "moneda", "proveedor", "pasajero", "codigo_iata"])
-    df.loc[:, "total"] = round(df["total"], 2)
+        # --- Crear hash determinista ---
+        df["hash"] = df.apply(ProcessData.hash_row, axis=1)
 
-    # ✅ Convertir fechas manejando NaT correctamente
-    date_cols = ["fecha_pago_proveedor", "fecha_in", "fecha_out", "fecha_sal"]
-    for col in date_cols:
-        df.loc[:, col] = pd.to_datetime(df[col]).dt.date
-    df["hash"] = df.apply(hash_row, axis=1)
-    # Convertir strings vacíos a None
-    text_cols = df.select_dtypes(include="object").columns
-    df[text_cols] = df[text_cols].replace({"": None})
+        # --- Guardar duplicados antes de eliminarlos (manteniendo 1) ---
+        duplicated_rows = df[df.duplicated(subset=df.columns, keep='first')].copy()
+        df.drop_duplicates(subset=df.columns, keep='first', inplace=True)
 
-    return df
+        # --- Guardar filas con 'file' nulo ---
+        missing_file_rows = df[df["file"].isna()].copy()
+        df.dropna(subset=["file"], inplace=True)
 
+        # --- Guardar eliminadas en un Excel ---
+        removed_rows = pd.concat([duplicated_rows, missing_file_rows]).drop_duplicates()
+        removed_rows.to_excel(
+            r"C:\Users\juans\Documents\cv\Proyectos\Ingenieria-de-Datos\TSA\Data-Engineering-Pipeline2\Pipeline\Archivos\Posibles Errores\filas_eliminadas.xlsx",
+            index=False
+        )
 
-def preproccess_prev(df: pd.DataFrame) -> pd.DataFrame:
-    columns_to_check = [
-        "codigo_transferencia",
-        "tipo_movimiento",
-        "fecha_pago",
-        "descripcion",
-        "moneda_pago",
-        "monto",
-        "tipo_de_cambio",
-        "comision",
-        "impuesto",
-        "estado_pago",
-        "tipo_de_saldo",
-        "banco",
-    ]
+        return df
 
-    df_filtered = df[df[columns_to_check].notna().any(axis=1)].copy()
-
-    df_filtered = clean_str(
-        df_filtered,
-        [
+    @staticmethod
+    def preproccess_prev(df: pd.DataFrame) -> pd.DataFrame:
+        columns_to_check = [
             "codigo_transferencia",
             "tipo_movimiento",
+            "fecha_pago",
             "descripcion",
             "moneda_pago",
+            "monto",
+            "tipo_de_cambio",
+            "comision",
+            "impuesto",
             "estado_pago",
             "tipo_de_saldo",
             "banco",
-        ],
-    )
+        ]
 
-    df_filtered["codigo_transferencia"] = df_filtered[
-        "codigo_transferencia"
-    ].str.replace(".0", "")
+        df_filtered = df[df[columns_to_check].notna().any(axis=1)].copy()
 
-    df_filtered["fecha_pago"] = pd.to_datetime(
-        df_filtered["fecha_pago"], errors="coerce"
-    ).dt.date
+        df_filtered = ProcessData.clean_str(
+            df_filtered,
+            [
+                "codigo_transferencia",
+                "tipo_movimiento",
+                "descripcion",
+                "moneda_pago",
+                "estado_pago",
+                "tipo_de_saldo",
+                "banco",
+            ],
+        )
 
-    text_cols = df_filtered.select_dtypes(include="object").columns
-    df_filtered[text_cols] = df_filtered[text_cols].replace({"": None})
-    return df_filtered
+        df_filtered["codigo_transferencia"] = df_filtered[
+            "codigo_transferencia"
+        ].str.replace(".0", "")
+
+        df_filtered["fecha_pago"] = pd.to_datetime(df_filtered["fecha_pago"]).dt.date
+
+        text_cols = df_filtered.select_dtypes(include="object").columns
+        df_filtered[text_cols] = df_filtered[text_cols].replace({"": None})
+        return df_filtered
 
 
 #############################################################################################
@@ -150,6 +157,7 @@ def setup_logging():
     logger.info("INICIANDO PROCESO DE IMPORTACIÓN DE RESERVAS")
     logger.info("=" * 60)
     return logger
+
 
 
 class ProcessTracker:

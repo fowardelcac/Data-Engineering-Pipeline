@@ -5,8 +5,8 @@ a = Analysis(
     ['desktop\\app.py'],
     pathex=[],
     binaries=[],
-    datas=[('Pipeline/*', 'Pipeline')],
-    hiddenimports=['pandas', 'selenium', 'sqlmodel', 'selenium.webdriver.common.by', 'pydantic', 'SQLAlchemy', 'requests'],  # Expanded list
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -3,9 +3,8 @@ from models import Iata
 from sqlmodel import create_engine, Session
 from functions import *
 
-df = pd.read_excel(
-    r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\iatas.xlsx"
-)
+IATA_PATH: str = r"C:\Users\juans\Documents\cv\Proyectos\Ingenieria-de-Datos\TSA\Data-Engineering-Pipeline2\Pipeline\Archivos\iatas.xlsx"
+df = pd.read_excel(IATA_PATH)
 
 
 def replacer_interrog(country: str):

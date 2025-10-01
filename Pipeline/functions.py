@@ -3,16 +3,35 @@ from sqlmodel import select, create_engine
 import logging
 import os
 from datetime import datetime, date
+import hashlib
 
 # PATHS
-ENGINE = create_engine("mysql+pymysql://root:Trips2025*@localhost/prevision")
+ENGINE = create_engine("mysql+pymysql://root:2001@localhost/prevision")
 
 PREVISION: str = (
-    r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\PREVISION.xlsx"
+    r"C:\Users\juans\Documents\cv\Proyectos\Ingenieria-de-Datos\TSA\Data-Engineering-Pipeline2\Pipeline\Archivos\PREVISION.xlsx"
 )
 ERRORES: str = (
-    r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\Posibles Errores"
+    r"C:\Users\juans\Documents\cv\Proyectos\Ingenieria-de-Datos\TSA\Data-Engineering-Pipeline2\Pipeline\Archivos\Posibles Errores"
 )
+
+import hashlib
+
+
+def hash_row(row):
+    # columnas que definen la transacción
+    claves = [
+        "file",
+        "moneda",
+        "fecha_in",
+        "fecha_out",
+        "fecha_sal",
+        "proveedor",
+        "pasajero",
+        "codigo_iata",
+    ]
+    row_str = "|".join(str(row[c]) for c in claves)
+    return hashlib.sha256(row_str.encode()).hexdigest()
 
 
 def clean_str(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -21,65 +40,27 @@ def clean_str(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
             df[col] = df[col].fillna("").astype(str).str.strip().str.upper()
     return df
 
+
 def clean_nan(value):
     return None if pd.isna(value) else value
 
-def values_differ(current, value) -> bool:
-    """
-    Compara valores considerando fechas, NaT, NaN y None de forma robusta.
-    CRITICAL: Esta función debe detectar cambios REALES, no falsos positivos.
-    """
-    # ✅ Normalizar ambos valores primero
-    def normalize(val):
-        # NaT, NaN, pd.NA → None
-        if pd.isna(val):
-            return None
-        # Timestamp → date
-        if isinstance(val, pd.Timestamp):
-            return val.date()
-        # Strings vacíos → None
-        if isinstance(val, str) and val.strip() == "":
-            return None
-        return val
-    
-    curr_norm = normalize(current)
-    val_norm = normalize(value)
-    
-    # Si ambos son None → NO difieren
-    if curr_norm is None and val_norm is None:
-        return False
-    
-    # Si solo uno es None → SÍ difieren
-    if (curr_norm is None) != (val_norm is None):
-        return True
-    
-    # Comparación especial para fechas
-    if isinstance(curr_norm, (datetime, date)) and isinstance(val_norm, (datetime, date)):
-        curr_date = curr_norm.date() if isinstance(curr_norm, datetime) else curr_norm
-        val_date = val_norm.date() if isinstance(val_norm, datetime) else val_norm
-        return curr_date != val_date
-    
-    # Comparación genérica
-    return curr_norm != val_norm
-
 
 def preproccess_traffic(df: pd.DataFrame) -> pd.DataFrame:
-    df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
     df.drop_duplicates(subset=df.columns, inplace=True)
-    df.dropna(subset=["file", "proveedor", "pasajero"], inplace=True)
+    df.dropna(subset=["file"], inplace=True)
 
     df = clean_str(df, ["estado", "moneda", "proveedor", "pasajero", "codigo_iata"])
-    df.loc[:, "monto_a_pagar"] = round(df["monto_a_pagar"], 2)
-    
+    df.loc[:, "total"] = round(df["total"], 2)
+
     # ✅ Convertir fechas manejando NaT correctamente
-    date_cols = ["fecha_de_pago_proveedor", "fecha_servicio", "fecha_out", "fecha_sal"]
+    date_cols = ["fecha_pago_proveedor", "fecha_in", "fecha_out", "fecha_sal"]
     for col in date_cols:
-        df.loc[:, col] = pd.to_datetime(df[col], errors='coerce').dt.date
-    
+        df.loc[:, col] = pd.to_datetime(df[col]).dt.date
+    df["hash"] = df.apply(hash_row, axis=1)
     # Convertir strings vacíos a None
     text_cols = df.select_dtypes(include="object").columns
     df[text_cols] = df[text_cols].replace({"": None})
-    
+
     return df
 
 
@@ -113,7 +94,7 @@ def preproccess_prev(df: pd.DataFrame) -> pd.DataFrame:
             "banco",
         ],
     )
-    
+
     df_filtered["codigo_transferencia"] = df_filtered[
         "codigo_transferencia"
     ].str.replace(".0", "")
@@ -121,7 +102,7 @@ def preproccess_prev(df: pd.DataFrame) -> pd.DataFrame:
     df_filtered["fecha_pago"] = pd.to_datetime(
         df_filtered["fecha_pago"], errors="coerce"
     ).dt.date
-    
+
     text_cols = df_filtered.select_dtypes(include="object").columns
     df_filtered[text_cols] = df_filtered[text_cols].replace({"": None})
     return df_filtered
@@ -266,63 +247,3 @@ class ProcessTracker:
                 2,
             ),
         }
-
-    def export_to_excel(self, folder=None, filename_prefix="reporte_reservas"):
-        """Exporta los reportes a Excel"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if folder is None:
-            folder = os.getcwd()  # Carpeta actual por defecto
-        os.makedirs(folder, exist_ok=True)  # Crear carpeta si no existe
-
-        # Crear DataFrame con todos los registros procesados
-        all_records = []
-        all_records.extend(self.new_records)
-        all_records.extend(self.updated_records)
-        all_records.extend(self.error_records)
-
-        if all_records:
-            df_reporte = pd.DataFrame(all_records)
-
-            # Crear archivo Excel con múltiples hojas
-            filename = f"{filename_prefix}_{timestamp}.xlsx"
-            filepath = os.path.join(folder, filename)
-            with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
-                # Hoja con todos los registros
-                df_reporte.to_excel(writer, sheet_name="Resumen_General", index=False)
-
-                # Hoja solo con actualizaciones
-                if self.updated_records:
-                    df_updated = pd.DataFrame(self.updated_records)
-                    df_updated.to_excel(writer, sheet_name="Actualizados", index=False)
-
-                # Hoja solo con errores
-                if self.error_records:
-                    df_errors = pd.DataFrame(self.error_records)
-                    df_errors.to_excel(writer, sheet_name="Errores", index=False)
-
-                # Hoja solo con nuevos
-                if self.new_records:
-                    df_new = pd.DataFrame(self.new_records)
-                    df_new.to_excel(writer, sheet_name="Nuevos", index=False)
-
-                # Hoja con estadísticas
-                summary = self.get_summary()
-                df_stats = pd.DataFrame(
-                    [
-                        ["Fecha de inicio", summary["inicio"]],
-                        ["Fecha de fin", summary["fin"]],
-                        ["Duración", summary["duracion"]],
-                        ["Total procesadas", summary["stats"]["total_procesadas"]],
-                        ["Nuevos registros", summary["stats"]["nuevos"]],
-                        ["Registros actualizados", summary["stats"]["actualizados"]],
-                        ["Sin cambios", summary["stats"]["sin_cambios"]],
-                        ["Errores", summary["stats"]["errores"]],
-                        ["Tasa de éxito (%)", summary["tasa_exito"]],
-                    ],
-                    columns=["Métrica", "Valor"],
-                )
-                df_stats.to_excel(writer, sheet_name="Estadisticas", index=False)
-
-            return filepath
-
-        return None

@@ -35,6 +35,7 @@ CREATE TABLE reservas (
     id_proveedor int,
     id_pasajero int,
     codigo_iata VARCHAR(3),
+    hash CHAR(64) NOT NULL UNIQUE,
     FOREIGN KEY (id_proveedor) REFERENCES proveedores(id_proveedor),
     FOREIGN KEY (id_pasajero) REFERENCES pasajeros(id_pasajero),
     FOREIGN KEY (codigo_iata) REFERENCES iatas(codigo_iata)

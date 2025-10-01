@@ -18,7 +18,7 @@ def main_scraper() -> pd.DataFrame:
     PASSWORD = "southamerica123"
 
     FECHA_HOY = datetime.datetime.now()
-    FECHA_TOP = FECHA_HOY + relativedelta(months=1)
+    FECHA_TOP = FECHA_HOY + relativedelta(months=20)
     print("FECHAS")
     print(FECHA_HOY, FECHA_TOP)
 
@@ -64,7 +64,7 @@ def main_scraper() -> pd.DataFrame:
 
     session = requests.Session()
     all_data = []
-    take = 100  # filas por request
+    take = 500  # filas por request
     skip = 0
 
     while True:
@@ -99,7 +99,6 @@ def main_scraper() -> pd.DataFrame:
         print(f"Traído {len(data)} filas, total acumulado: {len(all_data)}")
     driver.quit()
     cols: list = [
-        "idOrden",
         "rva",
         "estadoope",
         "monedalocal",
@@ -115,19 +114,17 @@ def main_scraper() -> pd.DataFrame:
     data = pd.DataFrame(all_data, columns=cols)
 
     columns = {
-        "idOrden":"id_orden",
         "rva": "file",
         "estadoope": "estado",
         "monedalocal": "moneda",
-        "Fec_in": "fecha_servicio",
+        "Fec_in": "fecha_in",
         "Fec_out": "fecha_out",
         "fec_sal": "fecha_sal",
-        "fec_vencop": "fecha_de_pago_proveedor",
+        "fec_vencop": "fecha_pago_proveedor",
         "Descrip": "pasajero",
-        "saldo": "monto_a_pagar",
+        "saldo": "total",
         "nombre": "proveedor",
         "ciudad": "codigo_iata",
     }
     data.rename(columns=columns, inplace=True)
-    #data.to_excel(r"C:\Users\jsaldano\Documents\Procesar\Pipeline\Archivos\V2.xlsx", index=False)
     return data

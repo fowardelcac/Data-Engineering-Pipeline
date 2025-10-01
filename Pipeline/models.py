@@ -28,7 +28,7 @@ class Cuenta(SQLModel, table=True):
 
 class Reserva(SQLModel, table=True):
     __tablename__ = "reservas"
-    id_reserva: int = Field(primary_key=True)
+    id_reserva: int | None = Field(default=None, primary_key=True)
     file: str = Field(max_length=6)
     estado: str = Field(max_length=2)
     moneda: str | None = Field(max_length=1)
@@ -37,6 +37,7 @@ class Reserva(SQLModel, table=True):
     fecha_in: date | None
     fecha_out: date | None
     fecha_sal: date | None
+    hash: str | None = Field(max_length=64)
     id_proveedor: int = Field(foreign_key="proveedores.id_proveedor")
     id_pasajero: int = Field(foreign_key="pasajeros.id_pasajero")
     codigo_iata: str = Field(max_length=3, foreign_key="iatas.codigo_iata")

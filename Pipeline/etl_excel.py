@@ -1,15 +1,14 @@
 import pandas as pd
 from Pipeline.models import Saldo, Cuenta, Reserva
 from sqlmodel import Session, select
-from Pipeline.functions import *
 from Pipeline.functions import (
     setup_logging,
     verify_existence,
     ProcessData,
     ProcessTracker,
 )
-from Pipeline.utils import ENGINE, PREVISION
-import os
+from Pipeline.utils import Paths
+import os, logging
 
 
 def process_row(
@@ -103,19 +102,19 @@ def main_excel():
     logger = setup_logging()
     tracker = ProcessTracker()
     try:
-        logger.info(f"📁 Leyendo archivo: {PREVISION}")
-        if not os.path.exists(PREVISION):
-            raise FileNotFoundError(f"Archivo no encontrado: {PREVISION}")
+        logger.info(f"📁 Leyendo archivo: {Paths.PREVISION}")
+        if not os.path.exists(Paths.PREVISION):
+            raise FileNotFoundError(f"Archivo no encontrado: {Paths.PREVISION}")
 
-        df = pd.read_excel(PREVISION, engine="openpyxl")
+        df = pd.read_excel(Paths.PREVISION, engine="openpyxl")
         logger.info(f"📊 Archivo leído exitosamente: {len(df)} filas encontradas")
         logger.info("🔄 Iniciando preprocesamiento...")
         df_original_count = len(df)
-        df = ProcessData.preprocess_prev(df)
+        df = ProcessData.preproccess_prev(df)
         logger.info(
             f"✅ Preprocesamiento completado: {len(df)} filas válidas (eliminadas: {df_original_count - len(df)})"
         )
-        with Session(ENGINE) as session:
+        with Session(Paths.ENGINE) as session:
             logger.info("🚀 Iniciando procesamiento de saldos...")
             for index, row in df.iterrows():
                 process_row(session, row, tracker, logger, index)

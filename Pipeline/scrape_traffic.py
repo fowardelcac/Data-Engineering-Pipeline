@@ -1,5 +1,8 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import logging
 import time
 import requests
 import pandas as pd
@@ -13,8 +16,8 @@ def main_scraper() -> pd.DataFrame:
     URL_DATA = "https://traffic.welcomelatinamerica.com/iTraffic_TSA/Services/Z_Reportes/SaldoAutoriza_List/List"
 
     # Datos de login
-    USERNAME = "Juancruz"
-    PASSWORD = "southamerica123"
+    USERNAME = ""
+    PASSWORD = ""
 
     FECHA_HOY = datetime.datetime.now()
     FECHA_TOP = FECHA_HOY + relativedelta(months=3)
@@ -26,25 +29,38 @@ def main_scraper() -> pd.DataFrame:
     options.add_argument("--window-size=1920,1080")  # tamaño de la ventana
 
     driver = webdriver.Chrome(options=options)
-
     # 2️⃣ Abrir la página de login
+
     driver.get(URL_LOGIN)
-    time.sleep(2)  # Esperar a que cargue
+    logging.info("Ingresando a traffic...")
+    wait = WebDriverWait(driver, 15)
 
-    # 3️⃣ Rellenar formulario
-    driver.find_element(
-        By.ID, "Softur_Serene_Membership_LoginPanel0_Username"
-    ).send_keys(USERNAME)
-    driver.find_element(
-        By.ID, "Softur_Serene_Membership_LoginPanel0_Password"
-    ).send_keys(PASSWORD)
+    # Espera el campo usuario
+    username_input = wait.until(
+        EC.presence_of_element_located(
+            (By.ID, "Softur_Serene_Membership_LoginPanel0_Username")
+        )
+    )
+    username_input.send_keys(USERNAME)
 
-    driver.find_element(
-        By.ID, "Softur_Serene_Membership_LoginPanel0_LoginButton"
-    ).click()
-    time.sleep(3)
+    # Espera el campo contraseña
+    password_input = wait.until(
+        EC.presence_of_element_located(
+            (By.ID, "Softur_Serene_Membership_LoginPanel0_Password")
+        )
+    )
+    password_input.send_keys(PASSWORD)
 
+    # Espera el botón login
+    login_button = wait.until(
+        EC.element_to_be_clickable(
+            (By.ID, "Softur_Serene_Membership_LoginPanel0_LoginButton")
+        )
+    )
+    login_button.click()
     # Cookies obtenidas de Selenium
+    logging.info("Ingreso.")
+    time.sleep(20)
     selenium_cookies = driver.get_cookies()
     cookies = {c["name"]: c["value"] for c in selenium_cookies}
 
@@ -60,7 +76,7 @@ def main_scraper() -> pd.DataFrame:
 
     session = requests.Session()
     all_data = []
-    take = 500  # filas por request
+    take = 100  # filas por request
     skip = 0
 
     while True:
@@ -83,8 +99,10 @@ def main_scraper() -> pd.DataFrame:
         )
 
         if response.status_code != 200:
+            logging.debug(f"Error, status: {response.status_code}")
             print("Error:", response.status_code)
             break
+
 
         data = response.json().get("Entities", [])
         if not data:

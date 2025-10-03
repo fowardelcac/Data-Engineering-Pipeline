@@ -4,38 +4,38 @@ USE PREVISION;
 
 CREATE TABLE proveedores (
     id_proveedor INT AUTO_INCREMENT PRIMARY KEY,
-    nombre_proveedor VARCHAR(255)
+    nombre_proveedor VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE pasajeros (
     id_pasajero INT AUTO_INCREMENT PRIMARY KEY,
-    nombre_pasajero VARCHAR(255)
+    nombre_pasajero VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE iatas (
     codigo_iata VARCHAR(3) PRIMARY KEY,
-    pais VARCHAR(50)
+    pais VARCHAR(50) NOT NULL
 );
 
 CREATE TABLE cuentas (
     id_cuenta INT AUTO_INCREMENT PRIMARY KEY,
-    banco VARCHAR(50) UNIQUE
+    banco VARCHAR(50) UNIQUE NOT NULL
 );
 
 CREATE TABLE reservas (
     id_reserva INT AUTO_INCREMENT PRIMARY KEY,
-    file CHAR(6),
-    estado VARCHAR(2),
+    file CHAR(6) NOT NULL,
+    estado VARCHAR(2) NOT NULL,
     moneda ENUM('P', 'D', 'L', 'B'),
-    total DECIMAL(15, 2),
+    total DECIMAL(15, 2) NOT NULL,
     fecha_pago_proveedor DATE,
     fecha_in DATE,
     fecha_out DATE,
     fecha_sal DATE,
     id_proveedor int,
     id_pasajero int,
-    codigo_iata VARCHAR(3),
-    hash CHAR(64) NOT NULL UNIQUE,
+    codigo_iata VARCHAR(3) NOT NULL,
+    hash CHAR(64) NOT NULL UNIQUE NOT NULL,
     FOREIGN KEY (id_proveedor) REFERENCES proveedores(id_proveedor),
     FOREIGN KEY (id_pasajero) REFERENCES pasajeros(id_pasajero),
     FOREIGN KEY (codigo_iata) REFERENCES iatas(codigo_iata)
@@ -44,12 +44,12 @@ CREATE TABLE reservas (
 CREATE TABLE saldos (
     id_saldo INT AUTO_INCREMENT PRIMARY KEY,
     codigo_transferencia VARCHAR(30),
-    tipo_movimiento ENUM('I', 'E'),
+    tipo_movimiento ENUM('I', 'E') NOT NULL,
     fecha_pago DATE,
     descripcion VARCHAR(150),
-    moneda_pago ENUM('P', 'D', 'L', 'B'),
-    monto DECIMAL(15, 2),
-    tipo_de_cambio DECIMAL(15, 2),
+    moneda_pago ENUM('P', 'D', 'L', 'B') NOT NULL,
+    monto DECIMAL(15, 2) NOT NULL,
+    tipo_de_cambio DECIMAL(15, 2) NOT NULL,
     comision DECIMAL(15, 2),
     impuesto DECIMAL(15, 2),
     estado_pago ENUM('CANCELADO', 'PAGADO', 'PENDIENTE', 'UTILIZADO'),

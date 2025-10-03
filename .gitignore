@@ -1,21 +1,17 @@
-# Entorno virtual
+# Ignorar la carpeta del entorno virtual
 venv/
 
-# Archivos compilados de Python
-__pycache__/
-*.py[cod]
-*$py.class
+# Ignorar la carpeta de configuración de Visual Studio Code
+.vscode/
 
-# Archivos de build y distribución
+# Ignorar la carpeta de archivos temporales
+temp/
+
+# Ignorar la carpeta de archivos de construcción
 build/
-dist/
-*.egg-info/
-.eggs/
 
-# Archivos de configuración locales
-*.env
-*.log
+# Ignorar todos los archivos con la extensión .xlsx
+*.xlsx
 
-# Archivos temporales del sistema
-.DS_Store
-Thumbs.db
+# Ignorar todos los archivos con la extensión .pdf
+*.pdf

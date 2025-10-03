@@ -9,7 +9,7 @@ from Pipeline.functions import (
     verify_existence,
 )
 from Pipeline.scrape_traffic import main_scraper
-from Pipeline.utils import ENGINE
+from Pipeline.utils import Paths
 
 
 def bulk_prov(df: pd.DataFrame, session: Session, logger: logging.Logger) -> dict:
@@ -161,7 +161,7 @@ def main_traffic():
             f"✅ Preprocesamiento completado: {len(df)} filas válidas (eliminadas: {df_original_count - len(df)})"
         )
 
-        with Session(ENGINE) as session:
+        with Session(Paths.ENGINE) as session:
             # Cargar mapeos
             proveedores_map = bulk_prov(df, session, logger)
             pasajeros_map = bulk_pass(df, session, logger)
